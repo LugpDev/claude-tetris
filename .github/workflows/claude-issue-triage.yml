@@ -1,0 +1,55 @@
+name: Claude Issue Triage
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  triage:
+    # No ejecutar sobre issues creados por bots (evita loops)
+    if: github.event.issue.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write        # necesario para etiquetar y comentar
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Issue Triage
+        id: claude-triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: '--allowed-tools "Bash(gh label list:*),Bash(gh issue view:*),Bash(gh issue edit:*),Bash(gh issue comment:*)"'
+          prompt: |
+            Eres un asistente de triage para el repositorio ${{ github.repository }},
+            un juego de Tetris en JavaScript vanilla (archivos: index.html, style.css, game.js).
+
+            Analiza el issue #${{ github.event.issue.number }}. Sigue estos pasos:
+
+            1. Lee el issue:
+               gh issue view ${{ github.event.issue.number }}
+
+            2. Consulta los labels EXISTENTES del repositorio:
+               gh label list
+               Usa ÚNICAMENTE labels que ya existan. NO crees labels nuevos.
+               Asigna los que apliquen con:
+               gh issue edit ${{ github.event.issue.number }} --add-label "<label>"
+
+            3. Publica un comentario en ESPAÑOL con un diagnóstico general del problema
+               usando `gh issue comment ${{ github.event.issue.number }} --body "..."`.
+               El diagnóstico debe incluir:
+               - Resumen del problema reportado.
+               - Componentes de game.js probablemente afectados (board model, piezas y
+                 rotación/wall kicks, colisión, game loop, limpieza de líneas, puntuación,
+                 niveles/velocidad, ghost piece).
+               - Consideraciones y posibles enfoques para la futura solución en código.
+
+            Si el issue ya tiene un comentario de diagnóstico previo (por una edición anterior),
+            actualiza el análisis publicando un nuevo comentario con la información revisada.
+
+            Sé conciso y técnico. Todo el contenido de cara al usuario debe ir en español.
